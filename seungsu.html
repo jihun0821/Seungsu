@@ -395,6 +395,7 @@ function setFatigueIncrease(id, val){const v = variables.find(x => x.id === id);
 function setBaseUtility(id, val){const v = variables.find(x => x.id === id);if(v){v.baseUtility = val;updateFormula();}}
 
 function updateFormula(){
+
   const T = +document.getElementById('sim-hours').value;
   const B = +document.getElementById('battery-slider').value;
 
@@ -405,26 +406,41 @@ function updateFormula(){
   let timeConstraint = vars.join(' + ');
 
   if(variables.length >= 1){
-    objective += `${variables[0].baseUtility.toFixed(1)}ln(${vars[0]})`;
-    batteryConstraint += `${variables[0].baseDrain.toFixed(1)}${vars[0]}`;
+
+    objective +=
+    `${variables[0].baseUtility.toFixed(1)}${vars[0]}
+     - ${variables[0].fatigueIncrease.toFixed(2)}${vars[0]}²`;
+
+    batteryConstraint +=
+    `${variables[0].baseDrain.toFixed(1)}${vars[0]}`;
   }
 
   for(let i=1;i<variables.length;i++){
-    objective += ` + ${variables[i].baseUtility.toFixed(1)}ln(${vars[i]})`;
-    batteryConstraint += ` + ${variables[i].baseDrain.toFixed(1)}${vars[i]}`;
+
+    objective +=
+    ` + ${variables[i].baseUtility.toFixed(1)}${vars[i]}
+      - ${variables[i].fatigueIncrease.toFixed(2)}${vars[i]}²`;
+
+    batteryConstraint +=
+    ` + ${variables[i].baseDrain.toFixed(1)}${vars[i]}`;
   }
 
   document.getElementById('formula-display').innerHTML =
+
   `<strong>목표함수</strong><br>
+
    f(${vars.join(', ')}) = ${objective}<br><br>
 
    <strong>배터리 제약조건</strong><br>
+
    ${batteryConstraint} = ${B}<br><br>
 
    <strong>시간 제약조건</strong><br>
+
    ${timeConstraint} = ${T}<br><br>
 
-   ${vars.join(', ')} ≥ 0.1`;
+   ${vars.join(', ')} ≥ 0`;
+
 }
 
 function openColorPicker(id, dotEl){
