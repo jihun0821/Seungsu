@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>라그랑주 승수법을 사용한 배터리 최적화</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg:#ffffff; --surface:#f7f8fa; --surface2:#eef0f4;
+  --border:rgba(0,0,0,0.08); --border2:rgba(0,0,0,0.16);
+  --text:#111118; --text2:#666680; --text3:#9999b0;
+  --blue:#2b7fff; --green:#0ea87a; --orange:#e8511a;
+  --purple:#9b52e8; --yellow:#d4a017; --pink:#d94f96;
+  --red:#ff4757;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-weight:300;min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,0,0,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+body::after{content:'';position:fixed;top:-40%;left:25%;width:700px;height:700px;background:radial-gradient(ellipse,rgba(43,127,255,0.06) 0%,transparent 65%);pointer-events:none;z-index:0;}
+
+header{position:relative;z-index:10;padding:50px 44px 36px;border-bottom:1px solid var(--border);display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;}
+.logo-tag{font-family:'Space Mono',monospace;font-size:10px;color:var(--blue);letter-spacing:.15em;text-transform:uppercase;padding:4px 10px;border:1px solid rgba(79,159,255,.28);border-radius:2px;margin-bottom:14px;display:inline-block;}
+h1{font-size:clamp(26px,4.5vw,50px);font-weight:700;letter-spacing:-.03em;line-height:1;}
+h1 em{color:var(--blue);font-style:normal;}
+.header-sub{font-family:'Space Mono',monospace;font-size:11px;color:var(--text2);letter-spacing:.04em;max-width:340px;line-height:1.8;}
+
+.main{position:relative;z-index:10;display:grid;grid-template-columns:420px 1fr;min-height:calc(100vh - 155px);}
+
+.sidebar{border-right:1px solid var(--border);padding:28px 26px;display:flex;flex-direction:column;gap:24px;background:var(--surface);overflow-y:auto;}
+
+.sec-label{font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+.mode-selector{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+.mode-btn{padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);cursor:pointer;transition:all .2s;}
+.mode-btn:hover{border-color:var(--blue);background:var(--surface2);}
+.mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+
+.battery-wrap{display:flex;align-items:center;gap:14px;}
+.battery-num{font-family:'Space Mono',monospace;font-size:38px;font-weight:700;color:var(--blue);letter-spacing:-.03em;min-width:70px;}
+.battery-unit{font-size:11px;color:var(--text3);margin-top:4px;}
+
+input[type=range]{-webkit-appearance:none;width:100%;height:2px;background:var(--border2);border-radius:1px;outline:none;cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--blue);border:2px solid #fff;cursor:pointer;transition:transform .15s;box-shadow:0 1px 4px rgba(0,0,0,0.18);}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.35);}
+
+input[type=text],input[type=number]{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:400;padding:6px 10px;outline:none;transition:border-color .2s;}
+input[type=text]:focus,input[type=number]:focus{border-color:var(--border2);}
+input[type=number]{width:64px;text-align:center;}
+input[type=text]{width:90px;}
+
+.var-list{display:flex;flex-direction:column;gap:10px;}
+
+.var-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px 14px 12px;transition:border-color .2s;position:relative;}
+.var-card:hover{border-color:var(--border2);}
+.var-card-top{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.var-color-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;cursor:pointer;transition:transform .15s;}
+.var-color-dot:hover{transform:scale(1.4);}
+.var-name-input{flex:1;background:transparent;border:none;font-size:13px;font-weight:500;color:var(--text);padding:2px 0;outline:none;border-bottom:1px solid transparent;transition:border-color .2s;font-family:'Noto Sans KR',sans-serif;}
+.var-name-input:focus{border-bottom-color:var(--border2);}
+.var-sym{font-family:'Space Mono',monospace;font-size:11px;color:var(--text3);background:var(--surface2);padding:2px 7px;border-radius:3px;}
+.del-btn{width:22px;height:22px;border-radius:50%;background:transparent;border:1px solid var(--border);color:var(--text3);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1;flex-shrink:0;}
+.del-btn:hover{border-color:var(--orange);color:var(--orange);}
+
+.var-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.var-field{display:flex;flex-direction:column;gap:5px;}
+.var-field-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);}
+.var-field-inner{display:flex;align-items:center;gap:7px;}
+.var-field-inner input[type=range]{flex:1;}
+.vval{font-family:'Space Mono',monospace;font-size:11px;color:var(--text2);min-width:28px;text-align:right;}
+
+.formula-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px 18px;font-family:'Space Mono',monospace;font-size:10px;line-height:2;color:var(--text2);word-break:break-word;max-height:200px;overflow-y:auto;}
+.fc{color:var(--blue);} .fv{color:var(--green);} .fl{color:var(--purple);}
+
+.run-btn{width:100%;padding:15px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
+.run-btn::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.15);transform:translateX(-100%);transition:transform .3s;}
+.run-btn:hover::before{transform:translateX(0);}
+.run-btn:hover{box-shadow:0 0 28px rgba(79,159,255,.45);}
+.run-btn:active{transform:scale(.98);}
+
+.btn-group{display:flex;gap:8px;}
+.btn-group button{flex:1;padding:10px;background:transparent;border:1px solid var(--border);border-radius:6px;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;cursor:pointer;transition:all .2s;color:var(--text2);}
+.btn-group button:hover{border-color:var(--blue);color:var(--blue);}
+
+.content{padding:30px 36px;display:flex;flex-direction:column;gap:22px;overflow-y:auto;}
+
+.tab-bar{display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;width:fit-content;}
+.tab-btn{padding:9px 20px;background:none;border:none;border-right:1px solid var(--border);font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);cursor:pointer;transition:all .2s;}
+.tab-btn:last-child{border-right:none;}
+.tab-btn:hover{background:var(--surface2);color:var(--text);}
+.tab-btn.active{background:var(--surface2);color:var(--blue);}
+
+.tab-panel{display:none;flex-direction:column;gap:20px;}
+.tab-panel.active{display:flex;}
+
+.efficiency-score{display:flex;align-items:center;gap:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;}
+.score-circle{width:100px;height:100px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-family:'Space Mono',monospace;font-size:32px;border:3px solid var(--border);}
+.score-label{font-size:11px;color:var(--text3);font-family:'Space Mono',monospace;letter-spacing:.1em;margin-top:4px;}
+.score-desc{flex:1;}
+.score-title{font-size:14px;font-weight:600;color:var(--text);}
+.score-detail{font-size:12px;color:var(--text2);line-height:1.6;margin-top:6px;}
+
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;}
+.mcard{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 16px;position:relative;overflow:hidden;transition:border-color .25s;}
+.mcard:hover{border-color:var(--border2);}
+.mcard-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3);margin-bottom:8px;}
+.mcard-val{font-family:'Space Mono',monospace;font-size:28px;font-weight:700;letter-spacing:-.03em;line-height:1;}
+.mcard-unit{font-size:11px;color:var(--text3);margin-top:3px;}
+
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;}
+.chart-card-label{font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3);margin-bottom:16px;}
+.chart-wrap{position:relative;width:100%;}
+
+.state-monitor{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
+.state-card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;}
+.state-card-label{color:var(--text3);font-family:'Space Mono',monospace;font-size:9px;margin-bottom:4px;text-transform:uppercase;}
+.state-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin:6px 0;}
+.state-bar-fill{height:100%;transition:width .3s;}
+
+.activity-timeline{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:11px;line-height:2;max-height:400px;overflow-y:auto;}
+.timeline-item{display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);}
+.timeline-item:last-child{border-bottom:none;}
+.timeline-time{color:var(--text3);font-family:'Space Mono',monospace;min-width:40px;}
+.timeline-activity{flex:1;}
+.timeline-activity-name{color:var(--text);font-weight:500;}
+.timeline-metrics{color:var(--text3);font-size:10px;margin-top:2px;font-family:'Space Mono',monospace;}
+
+.explanation-box{background:rgba(43,127,255,0.08);border:1px solid rgba(43,127,255,0.3);border-radius:8px;padding:16px;margin-top:12px;}
+.exp-title{font-size:12px;font-weight:600;color:var(--blue);margin-bottom:8px;font-family:'Space Mono',monospace;letter-spacing:.1em;}
+.exp-text{font-size:12px;color:var(--text2);line-height:1.7;font-family:'Space Mono',monospace;}
+
+.color-popup{position:absolute;left:0;top:38px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px;display:grid;grid-template-columns:repeat(5,1fr);gap:6px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.6);}
+.cp-dot{width:22px;height:22px;border-radius:50%;cursor:pointer;transition:transform .15s;border:2px solid transparent;}
+.cp-dot:hover{transform:scale(1.2);}
+.cp-dot.selected{border-color:#fff;}
+
+.empty-state{grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text3);font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.1em;line-height:2;}
+
+.constraint-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:12px;font-size:12px;line-height:1.8;}
+.constraint-title{font-weight:600;color:var(--text);margin-bottom:8px;}
+.constraint-item{display:flex;gap:8px;margin:6px 0;font-family:'Space Mono',monospace;}
+.constraint-icon{color:var(--blue);min-width:20px;}
+
+.convergence-info{background:rgba(34,211,160,0.1);border:1px solid rgba(34,211,160,0.3);border-radius:6px;padding:12px;font-size:11px;font-family:'Space Mono',monospace;line-height:1.6;margin-top:12px;}
+
+@media(max-width:820px){
+  .main{grid-template-columns:1fr;}
+  .sidebar{border-right:none;border-bottom:1px solid var(--border);}
+  header{padding:30px 20px 24px;}
+  .content{padding:20px;}
+  .sidebar{padding:20px;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo-tag">수과탐 라그랑주 승수법 with 소하윤, 임지훈</div>
+    <h1>배터리 사용 <em>최적화</em></h1>
+  </div>
+  <div class="header-sub">
+    라그랑주 승수법 <br>
+    안정적인 수렴 + 동적 상태 시뮬레이션
+  </div>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+
+    <div>
+      <div class="sec-label">사용 모드</div>
+      <div class="mode-selector">
+        <button class="mode-btn active" data-mode="balance" onclick="setMode('balance')">일반</button>
+        <button class="mode-btn" data-mode="eco" onclick="setMode('eco')">절전</button>
+        <button class="mode-btn" data-mode="high" onclick="setMode('high')">성능</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label">총 자원 (배터리 / 시간)</div>
+      <div class="battery-wrap">
+        <div>
+          <div class="battery-num" id="bat-display">100</div>
+          <div class="battery-unit">단위</div>
+        </div>
+        <input type="range" id="battery-slider" min="10" max="500" value="100" step="1"
+          oninput="document.getElementById('bat-display').textContent=this.value;updateFormula()">
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label">시뮬레이션 기간</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="number" id="sim-hours" min="1" max="72" value="24" step="1" style="width:70px;"
+          onchange="updateFormula()">
+        <span style="font-size:11px;color:var(--text3);">시간</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label">활동 변수</div>
+      <div class="var-list" id="var-list"></div>
+      <div style="margin-top:10px;">
+        <button class="add-var-btn" onclick="addVariable()">+ 변수 추가 (최대 5개)</button>
+        <button class="reset-btn" onclick="resetVariables()">⟲ 초기값 복원</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label">최적화 모델</div>
+      <div class="formula-card" id="formula-display">—</div>
+    </div>
+
+    <button class="run-btn" onclick="runLagrangeOptimization()">▶ 라그랑주 최적화</button>
+  </div>
+
+  <div class="content">
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('result')">결과</button>
+      <button class="tab-btn" onclick="switchTab('schedule')">일정</button>
+      <button class="tab-btn" onclick="switchTab('charts')">차트</button>
+      <button class="tab-btn" onclick="switchTab('constraints')">제약</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-result">
+      <div id="efficiency-score-container"></div>
+      <div class="state-monitor" id="state-monitor"></div>
+      <div class="metric-grid" id="metric-grid">
+        <div class="empty-state">왼쪽에서 변수를 설정하고<br>라그랑주 최적화 버튼을 누르세요</div>
+      </div>
+      <div id="explanation-container"></div>
+    </div>
+
+    <div class="tab-panel" id="tab-schedule">
+      <div class="chart-card">
+        <div class="chart-card-label">최적화된 일정 (전체 기간)</div>
+        <div class="activity-timeline" id="timeline-body">
+          <div style="color:var(--text3);text-align:center;padding:20px;">최적화 후 표시됩니다</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-charts">
+      <div class="chart-card">
+        <div class="chart-card-label">시간에 따른 배터리 소모</div>
+        <div class="chart-wrap" style="height:280px;">
+          <canvas id="batteryChart"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-label">누적 피로도 & 집중도 변화</div>
+        <div class="chart-wrap" style="height:280px;">
+          <canvas id="stateChart"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-label">활동별 최적 할당 시간</div>
+        <div class="chart-wrap" style="height:280px;">
+          <canvas id="activityChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-constraints">
+      <div class="constraint-box">
+        <div class="constraint-title">🔐 최적화 제약 조건</div>
+        <div id="constraint-content">
+          <div style="color:var(--text3);text-align:center;padding:20px;font-size:12px;">최적화 후 표시됩니다</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS = ['#4f9fff','#22d3a0','#ff6b4a','#c77dff','#ffd166'];
+const SYMS   = ['x','y','z','w','v'];
+
+const DEFAULT_VARS = [
+  {id:1,name:'게임', sym:'x',baseDrain:2.5,fatigueIncrease:0.15,baseUtility:3.0,color:'#4f9fff'},
+  {id:2,name:'영상', sym:'y',baseDrain:1.5,fatigueIncrease:0.08,baseUtility:2.0,color:'#22d3a0'},
+  {id:3,name:'공부',  sym:'z',baseDrain:0.8,fatigueIncrease:0.12,baseUtility:2.5,color:'#ff6b4a'},
+];
+
+const MODES = {
+  balance: {name:'균형'},
+  eco: {name:'절전', drainMult: 0.7},
+  high: {name:'고성능', drainMult: 1.4},
+};
+
+let variables = JSON.parse(JSON.stringify(DEFAULT_VARS));
+let nextId = 4;
+let currentMode = 'balance';
+let lastOptimizationData = null;
+let chartInstances = {};
+
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+  updateFormula();
+}
+
+function renderVarList(){
+  const list = document.getElementById('var-list');
+  list.innerHTML = '';
+  variables.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'var-card';
+    card.id = 'vc-' + v.id;
+    card.innerHTML = `
+      <div class="var-card-top">
+        <div class="var-color-dot" style="background:${v.color}" onclick="openColorPicker(${v.id},this)"></div>
+        <input class="var-name-input" type="text" value="${v.name}" maxlength="10"
+          oninput="setName(${v.id},this.value)" placeholder="활동명">
+        <span class="var-sym">${v.sym}</span>
+        <button class="del-btn" onclick="deleteVar(${v.id})">×</button>
+      </div>
+      <div class="var-row">
+        <div class="var-field">
+          <div class="var-field-label">배터리 소모 (a)</div>
+          <div class="var-field-inner">
+            <input type="range" min="0.1" max="5" step="0.1" value="${v.baseDrain}"
+              oninput="setBaseDrain(${v.id},+this.value);this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)">
+            <span class="vval">${v.baseDrain.toFixed(1)}</span>
+          </div>
+        </div>
+        <div class="var-field">
+          <div class="var-field-label">피로도 증가 (β)</div>
+          <div class="var-field-inner">
+            <input type="range" min="0.01" max="0.3" step="0.01" value="${v.fatigueIncrease}"
+              oninput="setFatigueIncrease(${v.id},+this.value);this.nextElementSibling.textContent=parseFloat(this.value).toFixed(2)">
+            <span class="vval">${v.fatigueIncrease.toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="var-field" style="margin-top:8px;">
+        <div class="var-field-label">기본 효용 (u)</div>
+        <div class="var-field-inner">
+          <input type="range" min="0.5" max="5" step="0.5" value="${v.baseUtility}"
+            oninput="setBaseUtility(${v.id},+this.value);this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)">
+          <span class="vval">${v.baseUtility.toFixed(1)}</span>
+        </div>
+      </div>`;
+    list.appendChild(card);
+  });
+  updateFormula();
+}
+
+function addVariable(){
+  if(variables.length >= 5){alert('최대 5개까지 추가할 수 있습니다.');return;}
+  const idx = variables.length;
+  variables.push({
+    id: nextId++, 
+    name: '활동'+variables.length, 
+    sym: SYMS[idx],
+    baseDrain: 1.5,
+    fatigueIncrease: 0.1,
+    baseUtility: 2.0,
+    color: COLORS[idx]
+  });
+  renderVarList();
+}
+
+function deleteVar(id){
+  if(variables.length <= 1){alert('최소 1개 변수가 필요합니다.');return;}
+  variables = variables.filter(v => v.id !== id);
+  variables.forEach((v, i) => {v.sym = SYMS[i];});
+  renderVarList();
+}
+
+function resetVariables(){
+  variables = JSON.parse(JSON.stringify(DEFAULT_VARS));
+  nextId = 4;
+  renderVarList();
+}
+
+function setName(id, val){const v = variables.find(x => x.id === id);if(v){v.name = val;updateFormula();}}
+function setBaseDrain(id, val){const v = variables.find(x => x.id === id);if(v){v.baseDrain = val;updateFormula();}}
+function setFatigueIncrease(id, val){const v = variables.find(x => x.id === id);if(v){v.fatigueIncrease = val;updateFormula();}}
+function setBaseUtility(id, val){const v = variables.find(x => x.id === id);if(v){v.baseUtility = val;updateFormula();}}
+
+function updateFormula(){
+  const T = +document.getElementById('sim-hours').value;
+  const B = +document.getElementById('battery-slider').value;
+  
+  let objective = variables.map(v => `${v.baseUtility.toFixed(1)}·${v.sym} - ${v.fatigueIncrease.toFixed(2)}·${v.sym}²`).join(' + ');
+  let constraint1 = variables.map(v => `${v.baseDrain.toFixed(1)}·${v.sym}`).join(' + ');
+  let constraint2 = variables.map(v => v.sym).join(' + ');
+  
+  document.getElementById('formula-display').innerHTML = 
+    `<strong>목표함수 (만족도 - 피로도²):</strong><br>
+    max f = ${objective}<br><br>
+    <strong>배터리 제약조건:</strong><br>
+    ${constraint1} = ${B}<br><br>
+    <strong>시간 제약조건:</strong><br>
+    ${constraint2} = ${T}<br>
+    모두 ≥ 0.1`;
+}
+
+function openColorPicker(id, dotEl){
+  document.querySelectorAll('.color-popup').forEach(p => p.remove());
+  const v = variables.find(x => x.id === id);
+  const popup = document.createElement('div');
+  popup.className = 'color-popup';
+  COLORS.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'cp-dot' + (c === v.color ? ' selected' : '');
+    d.style.background = c;
+    d.onclick = () => {
+      v.color = c;
+      dotEl.style.background = c;
+      popup.remove();
+      updateFormula();
+    };
+    popup.appendChild(d);
+  });
+  const card = document.getElementById('vc-' + id);
+  card.style.position = 'relative';
+  card.appendChild(popup);
+  setTimeout(() => {
+    document.addEventListener('click', function h(e){
+      if(!popup.contains(e.target) && e.target !== dotEl){popup.remove();document.removeEventListener('click',h);}
+    });
+  }, 50);
+}
+
+// ── GRADIENT DESCENT 기반 라그랑주 최적화 ──────────────────────────────────
+function runLagrangeOptimization(){
+  if(!variables.length) return;
+  
+  const B = +document.getElementById('battery-slider').value;
+  const T = +document.getElementById('sim-hours').value;
+  const modeConfig = MODES[currentMode];
+  const drainMult = modeConfig.drainMult || 1.0;
+
+  // ── 단계 1: Gradient Descent로 λ 찾기 ────────────────────
+  
+  let lambda1 = 0.1;  // 배터리 제약
+  let lambda2 = 0.1;  // 시간 제약
+  
+  const learningRate = 0.002;
+  const maxIterations = 500;
+  const tolerance = 0.01;
+  
+  let convergenceLog = [];
+  
+  for (let iter = 0; iter < maxIterations; iter++) {
+    // f(x) = Σ(uᵢxᵢ - aᵢxᵢ²)  →  ∂f/∂xᵢ = uᵢ - 2aᵢxᵢ = λ₁pᵢ + λ₂
+    // ⇒ xᵢ = (uᵢ - λ₁pᵢ - λ₂) / (2aᵢ)
+    let x_values = variables.map(v => {
+      const denom = 2 * v.fatigueIncrease;
+      const numer = v.baseUtility - lambda1 * v.baseDrain * drainMult - lambda2;
+      return Math.max(0.1, numer / denom);
+    });
+    
+    // 제약 조건 확인
+    let battery_used = x_values.reduce((s, x, i) => s + x * variables[i].baseDrain * drainMult, 0);
+    let time_used = x_values.reduce((s, x) => s + x, 0);
+    
+    let g1_error = battery_used - B;  // 배터리 제약 위반
+    let g2_error = time_used - T;      // 시간 제약 위반
+    
+    convergenceLog.push({
+      iter,
+      g1_error: Math.abs(g1_error),
+      g2_error: Math.abs(g2_error),
+      lambda1,
+      lambda2
+    });
+    
+    // 수렴 조건
+    if (Math.abs(g1_error) < tolerance && Math.abs(g2_error) < tolerance) {
+      console.log(`✓ 수렴 완료 (${iter}회 반복)`);
+      break;
+    }
+    
+    // Gradient Descent: λ 업데이트
+    // ∂L/∂λ₁ = -(battery_used - B)
+    // ∂L/∂λ₂ = -(time_used - T)
+    lambda1 += learningRate * g1_error;
+    lambda2 += learningRate * g2_error;
+    
+    // λ 음수 방지
+    lambda1 = Math.max(0.001, lambda1);
+    lambda2 = Math.max(0.001, lambda2);
+  }
+  
+  // 최종 최적 x 값
+  let optimalX = variables.map(v => {
+    const denom = 2 * v.fatigueIncrease;
+    const numer = v.baseUtility - lambda1 * v.baseDrain * drainMult - lambda2;
+    return Math.max(0.1, numer / denom);
+  });
+  
+  // ✅ 정규화: 시간 제약 만족하도록 스케일링
+  let sumX = optimalX.reduce((s, x) => s + x, 0);
+  optimalX = optimalX.map(x => x * (T / sumX));
+  
+  // ── 단계 2: 동적 시뮬레이션으로 일정 생성 ────────────────────
+  
+  let timeRemaining = JSON.parse(JSON.stringify(optimalX));
+  let schedule = [];
+  
+  function getTimeWeight(hour) {
+    const hourOfDay = hour % 24;
+    if (hourOfDay >= 6 && hourOfDay < 9) return 1.2;
+    if (hourOfDay >= 9 && hourOfDay < 12) return 1.15;
+    if (hourOfDay >= 12 && hourOfDay < 14) return 0.8;
+    if (hourOfDay >= 14 && hourOfDay < 18) return 1.25;
+    if (hourOfDay >= 18 && hourOfDay < 21) return 1.0;
+    if (hourOfDay >= 21 && hourOfDay < 23) return 0.75;
+    return 0.5;
+  }
+  
+  let state = {
+    fatigue: 0,
+    focus: 1.0,
+    battery: B,
+    lastActivity: null,
+    streak: {}
+  };
+  
+  variables.forEach((v, i) => {
+    state.streak[i] = 0;
+  });
+  
+  for (let hour = 0; hour < T; hour++) {
+    let bestIdx = -1;
+    let bestScore = -Infinity;
+    
+    variables.forEach((v, i) => {
+      if (timeRemaining[i] > 0.1) {
+        let score = optimalX[i] / (v.baseDrain * drainMult);
+        score *= getTimeWeight(hour);
+        score *= (1 - state.fatigue * 0.5);
+        
+        if (state.lastActivity === i) {
+          state.streak[i]++;
+          score *= Math.max(0.5, 1 - state.streak[i] * 0.08);
+        } else {
+          state.streak[i] = 1;
+        }
+        
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = i;
+        }
+      }
+    });
+    
+    if (bestIdx === -1) {
+      for (let i = 0; i < variables.length; i++) {
+        if (timeRemaining[i] > 0.1) {
+          bestIdx = i;
+          break;
+        }
+      }
+    }
+    
+    if (bestIdx === -1) bestIdx = 0;
+    
+    const v = variables[bestIdx];
+    timeRemaining[bestIdx] -= 1;
+    
+    state.fatigue = Math.min(1.0, state.fatigue + v.fatigueIncrease);
+    state.focus = Math.max(0.5, state.focus * (1 - v.fatigueIncrease * 0.1));
+    state.battery -= v.baseDrain * drainMult * (1 + state.fatigue * 0.3);
+    state.lastActivity = bestIdx;
+    
+    schedule.push({
+      hour,
+      activity: v.name,
+      activityId: bestIdx,
+      fatigue: state.fatigue,
+      focus: state.focus,
+      battery: Math.max(0, state.battery)
+    });
+  }
+
+  // ── 단계 3: 결과 렌더링 ────────────────────
+
+  const totalUtility = optimalX.reduce((s, x, i) => 
+    s + variables[i].baseUtility * x - variables[i].fatigueIncrease * x * x, 0);
+  const maxUtility = T * Math.max(...variables.map(v => v.baseUtility));
+  const efficiencyScore = Math.min(100, (totalUtility / maxUtility) * 100);
+  
+  let efficiencyStatus = '최적';
+  let efficiencyColor = '#0ea87a';
+  if(efficiencyScore < 85) {efficiencyStatus = '양호'; efficiencyColor = '#22d3a0';}
+  if(efficiencyScore < 70) {efficiencyStatus = '개선 필요'; efficiencyColor = '#d4a017';}
+  if(efficiencyScore < 50) {efficiencyStatus = '심각'; efficiencyColor = '#e8511a';}
+
+  document.getElementById('efficiency-score-container').innerHTML = `
+    <div class="efficiency-score">
+    <div class="convergence-info">
+      <strong>수렴 정보 (Gradient Descent):</strong><br>
+      학습률: ${learningRate} | 반복: ${convergenceLog.length}회<br>
+      최종 오차 - 배터리: ${convergenceLog[convergenceLog.length-1]?.g1_error.toFixed(4)} | 시간: ${convergenceLog[convergenceLog.length-1]?.g2_error.toFixed(4)}
+    </div>`;
+
+  const finalState = schedule[schedule.length - 1];
+  document.getElementById('state-monitor').innerHTML = `
+    <div class="state-card">
+      <div class="state-card-label">최종 피로도</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);">${(finalState.fatigue * 100).toFixed(1)}%</div>
+      <div class="state-bar"><div class="state-bar-fill" style="width:${finalState.fatigue * 100}%;background:#ff6b4a;"></div></div>
+    </div>
+    <div class="state-card">
+      <div class="state-card-label">최종 집중도</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);">${(finalState.focus * 100).toFixed(1)}%</div>
+      <div class="state-bar"><div class="state-bar-fill" style="width:${finalState.focus * 100}%;background:#4f9fff;"></div></div>
+    </div>
+    <div class="state-card">
+      <div class="state-card-label">남은 배터리</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);">${finalState.battery.toFixed(1)}</div>
+      <div class="state-bar"><div class="state-bar-fill" style="width:${(finalState.battery / B) * 100}%;background:#22d3a0;"></div></div>
+    </div>`;
+
+  document.getElementById('metric-grid').innerHTML = optimalX.map((x, i) => {
+    const v = variables[i];
+    const pct = ((x / T) * 100).toFixed(1);
+    return `<div class="mcard" style="border-bottom:2px solid ${v.color}">
+      <div class="mcard-label">${v.name}</div>
+      <div class="mcard-val" style="color:${v.color}">${x.toFixed(2)}</div>
+      <div class="mcard-unit">시간</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('explanation-container').innerHTML = `
+    <div class="explanation-box">
+      <div class="exp-title">📐 라그랑주 최적화 (Gradient Descent)</div>
+      <div class="exp-text">
+        <strong>목표함수:</strong> f = Σ(만족도×시간 - 피로도×시간²)<br>
+        <strong>의미:</strong> 활동을 오래 할수록 만족도는 시간에 비례해 증가하지만, 피로도는 시간의 제곱에 비례해 증가<br>
+        <strong>방법:</strong> Gradient Descent로 λ 업데이트<br>
+        <strong>수렴:</strong> 안정적이고 예측 가능한 수렴 동작<br>
+        <strong>λ₁=${lambda1.toFixed(4)}:</strong> 배터리 제약의 민감도<br>
+        <strong>λ₂=${lambda2.toFixed(4)}:</strong> 시간 제약의 민감도<br>
+        <strong>정규화:</strong> 최종 x값을 시간 제약에 맞게 스케일링
+      </div>
+    </div>`;
+
+  document.getElementById('timeline-body').innerHTML = schedule.map(s => {
+    const v = variables[s.activityId];
+    return `
+    <div class="timeline-item">
+      <div class="timeline-time">H${s.hour.toString().padStart(2,'0')}</div>
+      <div class="timeline-activity">
+        <span style="color:${v.color};font-weight:600;">■</span> ${v.name}
+        <div class="timeline-metrics">
+          효용: ${(variables[s.activityId].baseUtility * (24/variables.length) - variables[s.activityId].fatigueIncrease * Math.pow(24/variables.length,2)).toFixed(2)} | 피로도: ${(s.fatigue*100).toFixed(0)}% | 배터리: ${s.battery.toFixed(1)}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Charts
+  const hourLabels = schedule.map(s => 'H' + s.hour);
+  const batteryValues = schedule.map(s => s.battery);
+  const fatigueValues = schedule.map(s => s.fatigue);
+  const focusValues = schedule.map(s => s.focus);
+  
+  const batteryCtx = document.getElementById('batteryChart').getContext('2d');
+  if(chartInstances.battery) chartInstances.battery.destroy();
+  chartInstances.battery = new Chart(batteryCtx, {
+    type: 'line',
+    data: {
+      labels: hourLabels,
+      datasets: [{
+        label: '배터리',
+        data: batteryValues,
+        borderColor: '#4f9fff',
+        backgroundColor: 'rgba(79,159,255,0.1)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 2,
+        pointRadius: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend: {display: false}},
+      scales: {
+        y: {min: 0, max: B, ticks: {color: '#555568'}, grid: {color: 'rgba(255,255,255,0.04)'}},
+        x: {ticks: {color: '#555568'}, grid: {color: 'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+
+  const stateCtx = document.getElementById('stateChart').getContext('2d');
+  if(chartInstances.state) chartInstances.state.destroy();
+  chartInstances.state = new Chart(stateCtx, {
+    type: 'line',
+    data: {
+      labels: hourLabels,
+      datasets: [
+        {
+          label: '피로도',
+          data: fatigueValues,
+          borderColor: '#ff6b4a',
+          backgroundColor: 'rgba(255,107,74,0.1)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2,
+          pointRadius: 1
+        },
+        {
+          label: '집중도',
+          data: focusValues,
+          borderColor: '#4f9fff',
+          backgroundColor: 'rgba(79,159,255,0)',
+          fill: false,
+          tension: 0.4,
+          borderWidth: 2,
+          pointRadius: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend: {position: 'top'}},
+      scales: {
+        y: {min: 0, max: 1, ticks: {color: '#555568'}, grid: {color: 'rgba(255,255,255,0.04)'}},
+        x: {ticks: {color: '#555568'}, grid: {color: 'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+
+  const activityCtx = document.getElementById('activityChart').getContext('2d');
+  if(chartInstances.activity) chartInstances.activity.destroy();
+  chartInstances.activity = new Chart(activityCtx, {
+    type: 'bar',
+    data: {
+      labels: variables.map(v => v.name),
+      datasets: [{
+        label: '할당 시간',
+        data: optimalX.map(x => x.toFixed(2)),
+        backgroundColor: variables.map(v => v.color)
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend: {display: false}},
+      scales: {
+        y: {beginAtZero: true, ticks: {color: '#555568'}, grid: {color: 'rgba(255,255,255,0.04)'}},
+        x: {ticks: {color: '#555568'}, grid: {color: 'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+
+  // Constraints
+  const batteryUsed = optimalX.reduce((s, x, i) => s + x * variables[i].baseDrain * drainMult, 0);
+  const totalFatigue = optimalX.reduce((s, x, i) => s + x * variables[i].fatigueIncrease, 0);
+  const timeUsed = optimalX.reduce((s, x) => s + x, 0);
+  
+  document.getElementById('constraint-content').innerHTML = `
+    <div class="constraint-item">
+      <div class="constraint-icon">✓</div>
+      <div>
+        <strong>배터리 제약:</strong> ${batteryUsed.toFixed(2)} / ${B} (${((batteryUsed/B)*100).toFixed(1)}%)
+      </div>
+    </div>
+    <div class="constraint-item">
+      <div class="constraint-icon">✓</div>
+      <div>
+        <strong>시간 제약:</strong> ${timeUsed.toFixed(2)} / ${T} (${((timeUsed/T)*100).toFixed(1)}%)
+      </div>
+    </div>
+    <div class="constraint-item">
+      <div class="constraint-icon">▬</div>
+      <div>
+        <strong>누적 피로도:</strong> ${totalFatigue.toFixed(3)}
+      </div>
+    </div>
+    <div class="constraint-item">
+      <div class="constraint-icon">▬</div>
+      <div>
+        <strong>라그랑주 승수 λ₁:</strong> ${lambda1.toFixed(6)}
+      </div>
+    </div>
+    <div class="constraint-item">
+      <div class="constraint-icon">▬</div>
+      <div>
+        <strong>라그랑주 승수 λ₂:</strong> ${lambda2.toFixed(6)}
+      </div>
+    </div>`;
+
+  lastOptimizationData = {
+    optimalX,
+    lambda1,
+    lambda2,
+    schedule,
+    totalUtility,
+    efficiencyScore
+  };
+
+  switchTab('result');
+}
+
+const TAB_NAMES = {'result': '결과', 'schedule': '일정', 'charts': '차트', 'constraints': '제약'};
+function switchTab(name){
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => {if(b.textContent.trim() === TAB_NAMES[name]) b.classList.add('active');});
+}
+
+renderVarList();
+</script>
+</body>
+</html>
