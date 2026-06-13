@@ -1,7 +1,4 @@
 <!DOCTYPE html>
-//라그랑주 승수법 자체를 직접 구현하는건 내 실력으로는 불가능 하니까 대충 관련 알고리즘 찾아보고 ai 도움 받아서 만드는게 좋을 듯 
-
-//수학 탐구 쪽은 하윤이가 하고, 라그랑주 승수법 관련 알고리즘들을 찾아본 결과 python에선 sympy 라이브러리나 scipy.optimize 라이브러리 등을 이용해서 구현하는 걸 참고해서 ai 도움 받았다 해야겠다.
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -387,52 +384,21 @@ function setFatigueIncrease(id, val){const v = variables.find(x => x.id === id);
 function setBaseUtility(id, val){const v = variables.find(x => x.id === id);if(v){v.baseUtility = val;updateFormula();}}
 
 function updateFormula(){
-
   const T = +document.getElementById('sim-hours').value;
   const B = +document.getElementById('battery-slider').value;
-
-  const vars = variables.map(v => v.sym);
-
-  let objective = '';
-  let batteryConstraint = '';
-  let timeConstraint = vars.join(' + ');
-
-  if(variables.length >= 1){
-
-    objective +=
-    `${variables[0].baseUtility.toFixed(1)}${vars[0]}
-     - ${variables[0].fatigueIncrease.toFixed(2)}${vars[0]}²`;
-
-    batteryConstraint +=
-    `${variables[0].baseDrain.toFixed(1)}${vars[0]}`;
-  }
-
-  for(let i=1;i<variables.length;i++){
-
-    objective +=
-    ` + ${variables[i].baseUtility.toFixed(1)}${vars[i]}
-      - ${variables[i].fatigueIncrease.toFixed(2)}${vars[i]}²`;
-
-    batteryConstraint +=
-    ` + ${variables[i].baseDrain.toFixed(1)}${vars[i]}`;
-  }
-
-  document.getElementById('formula-display').innerHTML =
-
-  `<strong>목표함수</strong><br>
-
-   f(${vars.join(', ')}) = ${objective}<br><br>
-
-   <strong>배터리 제약조건</strong><br>
-
-   ${batteryConstraint} = ${B}<br><br>
-
-   <strong>시간 제약조건</strong><br>
-
-   ${timeConstraint} = ${T}<br><br>
-
-   ${vars.join(', ')} ≥ 0`;
-
+  
+  let objective = variables.map(v => `${v.baseUtility.toFixed(1)}·${v.sym} - ${v.fatigueIncrease.toFixed(2)}·${v.sym}²`).join(' + ');
+  let constraint1 = variables.map(v => `${v.baseDrain.toFixed(1)}·${v.sym}`).join(' + ');
+  let constraint2 = variables.map(v => v.sym).join(' + ');
+  
+  document.getElementById('formula-display').innerHTML = 
+    `<strong>목표함수 (만족도 - 피로도²):</strong><br>
+    max f = ${objective}<br><br>
+    <strong>배터리 제약조건:</strong><br>
+    ${constraint1} = ${B}<br><br>
+    <strong>시간 제약조건:</strong><br>
+    ${constraint2} = ${T}<br>
+    모두 ≥ 0.1`;
 }
 
 function openColorPicker(id, dotEl){
@@ -483,10 +449,12 @@ function runLagrangeOptimization(){
   let convergenceLog = [];
   
   for (let iter = 0; iter < maxIterations; iter++) {
-    // 현재 λ 값으로 x 계산
+    // f(x) = Σ(uᵢxᵢ - aᵢxᵢ²)  →  ∂f/∂xᵢ = uᵢ - 2aᵢxᵢ = λ₁pᵢ + λ₂
+    // ⇒ xᵢ = (uᵢ - λ₁pᵢ - λ₂) / (2aᵢ)
     let x_values = variables.map(v => {
-      const denom = lambda1 * v.baseDrain * drainMult + lambda2;
-      return Math.max(0.1, v.baseUtility / denom);
+      const denom = 2 * v.fatigueIncrease;
+      const numer = v.baseUtility - lambda1 * v.baseDrain * drainMult - lambda2;
+      return Math.max(0.1, numer / denom);
     });
     
     // 제약 조건 확인
@@ -523,8 +491,9 @@ function runLagrangeOptimization(){
   
   // 최종 최적 x 값
   let optimalX = variables.map(v => {
-    const denom = lambda1 * v.baseDrain * drainMult + lambda2;
-    return Math.max(0.1, v.baseUtility / denom);
+    const denom = 2 * v.fatigueIncrease;
+    const numer = v.baseUtility - lambda1 * v.baseDrain * drainMult - lambda2;
+    return Math.max(0.1, numer / denom);
   });
   
   // ✅ 정규화: 시간 제약 만족하도록 스케일링
@@ -615,7 +584,7 @@ function runLagrangeOptimization(){
   // ── 단계 3: 결과 렌더링 ────────────────────
 
   const totalUtility = optimalX.reduce((s, x, i) => 
-    s + variables[i].baseUtility * Math.log(Math.max(x, 0.1)), 0);
+    s + variables[i].baseUtility * x - variables[i].fatigueIncrease * x * x, 0);
   const maxUtility = T * Math.max(...variables.map(v => v.baseUtility));
   const efficiencyScore = Math.min(100, (totalUtility / maxUtility) * 100);
   
@@ -665,6 +634,8 @@ function runLagrangeOptimization(){
     <div class="explanation-box">
       <div class="exp-title">📐 라그랑주 최적화 (Gradient Descent)</div>
       <div class="exp-text">
+        <strong>목표함수:</strong> f = Σ(만족도×시간 - 피로도×시간²)<br>
+        <strong>의미:</strong> 활동을 오래 할수록 만족도는 시간에 비례해 증가하지만, 피로도는 시간의 제곱에 비례해 증가<br>
         <strong>방법:</strong> Gradient Descent로 λ 업데이트<br>
         <strong>수렴:</strong> 안정적이고 예측 가능한 수렴 동작<br>
         <strong>λ₁=${lambda1.toFixed(4)}:</strong> 배터리 제약의 민감도<br>
@@ -681,7 +652,7 @@ function runLagrangeOptimization(){
       <div class="timeline-activity">
         <span style="color:${v.color};font-weight:600;">■</span> ${v.name}
         <div class="timeline-metrics">
-          효용: ${(variables[s.activityId].baseUtility * Math.log(Math.max(1, 24/variables.length))).toFixed(2)} | 피로도: ${(s.fatigue*100).toFixed(0)}% | 배터리: ${s.battery.toFixed(1)}
+          효용: ${(variables[s.activityId].baseUtility * (24/variables.length) - variables[s.activityId].fatigueIncrease * Math.pow(24/variables.length,2)).toFixed(2)} | 피로도: ${(s.fatigue*100).toFixed(0)}% | 배터리: ${s.battery.toFixed(1)}
         </div>
       </div>
     </div>`;
